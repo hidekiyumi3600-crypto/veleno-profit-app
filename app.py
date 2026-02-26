@@ -91,11 +91,6 @@ def add_profit_columns(df, channel):
     return df
 
 
-def style_profit(val):
-    if isinstance(val, (int, float)) and val < 0:
-        return "color: red; font-weight: bold"
-    return ""
-
 
 # --- データ読み込み ---
 df = load_data()
@@ -164,34 +159,30 @@ if page == "商品一覧":
     sort_asc = st.checkbox("昇順（低い順）", value=True)
     view = view.sort_values(sort_col, ascending=sort_asc)
 
-    styled = view[display_cols].rename(columns=display_names)
-    fmt = {
-        "No": "{:.0f}",
-        "定価(税込)": "¥{:,.0f}",
-        "割引率": lambda x: f"{x:.0%}" if x > 0 else "-",
-        "販売価格(税込)": "¥{:,.0f}",
-        "原価": "¥{:,.0f}",
-        "利益(税抜)": "¥{:,.0f}",
-        "粗利率(%)": "{:.1f}%",
-    }
-    st.dataframe(
-        styled.style.format(fmt, na_rep="-").map(style_profit, subset=["利益(税抜)", "粗利率(%)"]),
-        height=600,
-        use_container_width=True,
-    )
+    disp = view[display_cols].copy()
+    disp[list_price_col] = disp[list_price_col].apply(lambda x: f"¥{x:,.0f}")
+    disp[discount1_col] = disp[discount1_col].apply(lambda x: f"{x:.0%}" if x > 0 else "-")
+    disp[price_col] = disp[price_col].apply(lambda x: f"¥{x:,.0f}")
+    disp["cost_jpy"] = disp["cost_jpy"].apply(lambda x: f"¥{x:,.0f}")
+    disp[f"{channel}_利益"] = disp[f"{channel}_利益"].apply(lambda x: f"¥{x:,.0f}")
+    disp[f"{channel}_粗利率"] = disp[f"{channel}_粗利率"].apply(lambda x: f"{x:.1f}%")
+    disp = disp.rename(columns=display_names)
+    st.dataframe(disp, height=600, use_container_width=True)
 
     # TOP/WORST
-    rank_fmt = {"販売価格": "¥{:,.0f}", "利益": "¥{:,.0f}", "粗利率(%)": "{:.1f}%"}
+    def fmt_ranking(src, profit_col, margin_col):
+        d = src[["name", "size", "color", price_col, profit_col, margin_col]].copy()
+        d.columns = ["商品名", "サイズ", "色", "販売価格", "利益", "粗利率(%)"]
+        d["販売価格"] = d["販売価格"].apply(lambda x: f"¥{x:,.0f}")
+        d["利益"] = d["利益"].apply(lambda x: f"¥{x:,.0f}")
+        d["粗利率(%)"] = d["粗利率(%)"].apply(lambda x: f"{x:.1f}%")
+        return d
 
     st.subheader("利益 TOP10")
-    top10 = view.nlargest(10, f"{channel}_利益")[["name", "size", "color", price_col, f"{channel}_利益", f"{channel}_粗利率"]]
-    top10.columns = ["商品名", "サイズ", "色", "販売価格", "利益", "粗利率(%)"]
-    st.dataframe(top10.style.format(rank_fmt).map(style_profit, subset=["利益", "粗利率(%)"]), use_container_width=True)
+    st.dataframe(fmt_ranking(view.nlargest(10, f"{channel}_利益"), f"{channel}_利益", f"{channel}_粗利率"), use_container_width=True)
 
     st.subheader("利益 WORST10（赤字順）")
-    worst10 = view.nsmallest(10, f"{channel}_利益")[["name", "size", "color", price_col, f"{channel}_利益", f"{channel}_粗利率"]]
-    worst10.columns = ["商品名", "サイズ", "色", "販売価格", "利益", "粗利率(%)"]
-    st.dataframe(worst10.style.format(rank_fmt).map(style_profit, subset=["利益", "粗利率(%)"]), use_container_width=True)
+    st.dataframe(fmt_ranking(view.nsmallest(10, f"{channel}_利益"), f"{channel}_利益", f"{channel}_粗利率"), use_container_width=True)
 
 # =====================================================
 # 画面2: 商品詳細 & チャネル比較
@@ -269,8 +260,9 @@ elif page == "商品詳細・チャネル比較":
         })
 
     result_df = pd.DataFrame(results)
-    ch_fmt = {"利益": "¥{:,.0f}", "粗利率(%)": "{:.1f}%"}
-    st.dataframe(result_df.style.format(ch_fmt).map(style_profit, subset=["利益", "粗利率(%)"]), use_container_width=True)
+    result_df["利益"] = result_df["利益"].apply(lambda x: f"¥{x:,.0f}" if isinstance(x, (int, float)) else x)
+    result_df["粗利率(%)"] = result_df["粗利率(%)"].apply(lambda x: f"{x:.1f}%" if isinstance(x, (int, float)) else x)
+    st.dataframe(result_df, use_container_width=True)
 
     # 棒グラフ
     chart_data = pd.DataFrame({
