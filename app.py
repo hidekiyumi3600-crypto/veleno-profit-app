@@ -105,9 +105,18 @@ def inject_custom_css():
     /* Streamlitブランディング非表示（サイドバー開閉ボタンは残す） */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
-    button[data-testid="stSidebarCollapseButton"],
-    button[data-testid="collapsedControl"] {
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        border: none !important;
+    }
+    header[data-testid="stHeader"] > div:first-child {
+        visibility: hidden;
+    }
+    [data-testid="collapsedControl"] {
+        visibility: visible !important;
+        z-index: 999 !important;
+    }
+    [data-testid="stSidebarCollapseButton"] {
         visibility: visible !important;
     }
 
