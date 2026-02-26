@@ -102,10 +102,14 @@ def inject_custom_css():
         color: #ffffff !important;
     }
 
-    /* Streamlitブランディング非表示 */
+    /* Streamlitブランディング非表示（サイドバー開閉ボタンは残す） */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    button[data-testid="stSidebarCollapseButton"],
+    button[data-testid="collapsedControl"] {
+        visibility: visible !important;
+    }
 
     /* ログインカード */
     .login-card {
@@ -143,6 +147,26 @@ def inject_custom_css():
         font-weight: 700;
         font-size: 1.05em;
         margin-bottom: 8px;
+    }
+
+    /* スマホ対応 */
+    @media (max-width: 768px) {
+        .main .block-container { padding: 0.5rem !important; }
+        h1 { font-size: 1.3em; }
+        .metric-card { padding: 10px 8px; }
+        .metric-card .value { font-size: 1.2em; }
+        .metric-card .label { font-size: 0.72em; }
+        .metric-card .delta { font-size: 0.7em; }
+        .section-title { font-size: 1.1em; }
+        .metric-card [style*="display:flex"][style*="gap:32px"],
+        .metric-card [style*="display: flex"][style*="gap: 32px"] {
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+        }
+        .login-card { margin: 40px auto; padding: 24px 20px; }
+        .stDataFrame { font-size: 0.8em; }
+        .form-section { padding: 12px; }
+        .delete-card { padding: 14px; }
     }
     </style>
     """, unsafe_allow_html=True)
