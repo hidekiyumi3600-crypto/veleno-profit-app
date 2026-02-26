@@ -12,6 +12,27 @@ CHANNEL_CONFIG = {
 
 st.set_page_config(page_title="VELENO 利益計算", page_icon="🚗", layout="wide")
 
+# --- パスワード認証 ---
+def check_password():
+    """パスワード認証。正しければTrueを返す。"""
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+
+    if st.session_state.authenticated:
+        return True
+
+    st.title("🔒 VELENO 利益計算")
+    password = st.text_input("パスワードを入力してください", type="password")
+    if st.button("ログイン", type="primary"):
+        if password == st.secrets["password"]:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("パスワードが正しくありません")
+    return False
+
+if not check_password():
+    st.stop()
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "products.csv")
 
