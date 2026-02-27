@@ -648,17 +648,24 @@ elif page == "📈 価格シミュレーション":
         new_price = st.number_input("販売価格（税込）", min_value=0, max_value=100000,
                                      value=int(current_price), step=100)
 
-        discount_pct = st.slider("割引率 (%)", 0, 80, 0)
-        price_after_1st = int(new_price * (1 - discount_pct / 100))
+        disc1_type = st.radio("1段階目の割引方式", ["割引率(%)", "割引額(円)"], horizontal=True, key="disc1_type")
+        if disc1_type == "割引率(%)":
+            discount_pct = st.slider("割引率 (%)", 0, 80, 0)
+            price_after_1st = int(new_price * (1 - discount_pct / 100))
+        else:
+            discount_yen = st.number_input("割引額（円）", min_value=0, max_value=100000, value=0, step=100, key="disc1_yen")
+            price_after_1st = max(0, int(new_price - discount_yen))
         st.write(f"1段階目の割引後: **¥{price_after_1st:,}**")
 
         # 追加割引セクション
         st.markdown('<div class="form-section"><div class="form-section-title">🏷️ 追加割引</div></div>', unsafe_allow_html=True)
-        extra_pct = st.slider("追加割引率 (%)", 0, 50, 0)
-        extra_yen = st.number_input("追加割引額（円）", min_value=0, max_value=50000, value=0, step=100)
-        discounted_price = int(price_after_1st * (1 - extra_pct / 100) - extra_yen)
-        if discounted_price < 0:
-            discounted_price = 0
+        disc2_type = st.radio("2段階目の割引方式", ["割引率(%)", "割引額(円)"], horizontal=True, key="disc2_type")
+        if disc2_type == "割引率(%)":
+            extra_pct = st.slider("追加割引率 (%)", 0, 50, 0)
+            discounted_price = max(0, int(price_after_1st * (1 - extra_pct / 100)))
+        else:
+            extra_yen = st.number_input("追加割引額（円）", min_value=0, max_value=50000, value=0, step=100, key="disc2_yen")
+            discounted_price = max(0, int(price_after_1st - extra_yen))
         st.write(f"最終販売価格: **¥{discounted_price:,}**")
         total_off = new_price - discounted_price
         total_off_pct = (total_off / new_price * 100) if new_price > 0 else 0
