@@ -804,29 +804,17 @@ elif page == "📈 価格シミュレーション":
 
     st.divider()
 
-    # 商品・チャネル変更検知 → 自動リセット
-    SIM_KEYS = ["sim_price", "disc1_type", "disc1_pct", "disc1_yen",
-                "disc2_type", "disc2_pct", "disc2_yen",
-                "sim_fee_rate", "sim_exchange", "target_profit_yen"]
-    sim_context = f"{idx}_{channel}"
-    if st.session_state.get("_sim_context") != sim_context:
-        for key in SIM_KEYS:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.session_state["_sim_context"] = sim_context
-
     col_left, col_right = st.columns(2)
 
     with col_left:
         # 価格設定セクション
         st.markdown('<div class="form-section"><div class="form-section-title">💰 価格設定</div></div>', unsafe_allow_html=True)
-
         new_price = st.number_input("販売価格（税込）", min_value=0, max_value=100000,
-                                     value=int(current_price), step=100, key="sim_price")
+                                     value=int(current_price), step=100)
 
         disc1_type = st.radio("1段階目の割引方式", ["割引率(%)", "割引額(円)"], horizontal=True, key="disc1_type")
         if disc1_type == "割引率(%)":
-            discount_pct = st.slider("割引率 (%)", 0, 80, 0, key="disc1_pct")
+            discount_pct = st.slider("割引率 (%)", 0, 80, 0)
             price_after_1st = int(new_price * (1 - discount_pct / 100))
             disc1_yen_ref = new_price - price_after_1st
             st.caption(f"= ¥{disc1_yen_ref:,}引き")
@@ -841,7 +829,7 @@ elif page == "📈 価格シミュレーション":
         st.markdown('<div class="form-section"><div class="form-section-title">🏷️ 追加割引</div></div>', unsafe_allow_html=True)
         disc2_type = st.radio("2段階目の割引方式", ["割引率(%)", "割引額(円)"], horizontal=True, key="disc2_type")
         if disc2_type == "割引率(%)":
-            extra_pct = st.slider("追加割引率 (%)", 0, 50, 0, key="disc2_pct")
+            extra_pct = st.slider("追加割引率 (%)", 0, 50, 0)
             discounted_price = max(0, int(price_after_1st * (1 - extra_pct / 100)))
             disc2_yen_ref = price_after_1st - discounted_price
             st.caption(f"= ¥{disc2_yen_ref:,}引き")
@@ -857,17 +845,9 @@ elif page == "📈 価格シミュレーション":
 
         # コスト変更セクション
         st.markdown('<div class="form-section"><div class="form-section-title">🔧 コスト変更</div></div>', unsafe_allow_html=True)
-        new_fee_rate = st.slider("手数料率 (%)", 0.0, 30.0, cfg["default_fee_rate"] * 100, 0.5, key="sim_fee_rate") / 100
+        new_fee_rate = st.slider("手数料率 (%)", 0.0, 30.0, cfg["default_fee_rate"] * 100, 0.5) / 100
         new_exchange = st.number_input("為替レート (円/ドル)", min_value=80.0, max_value=200.0,
-                                        value=float(row["exchange_rate"]) if row["exchange_rate"] > 0 else 150.0, step=1.0, key="sim_exchange")
-
-        # #4 リセットボタン
-        if st.button("🔄 リセット", use_container_width=True):
-            for key in SIM_KEYS:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.pop("_sim_context", None)
-            st.rerun()
+                                        value=float(row["exchange_rate"]) if row["exchange_rate"] > 0 else 150.0, step=1.0)
 
     with col_right:
         st.markdown(html_section_title("シミュレーション結果"), unsafe_allow_html=True)
