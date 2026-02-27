@@ -804,14 +804,22 @@ elif page == "📈 価格シミュレーション":
 
     st.divider()
 
+    # 商品・チャネル変更検知 → 自動リセット
+    SIM_KEYS = ["sim_price", "disc1_type", "disc1_pct", "disc1_yen",
+                "disc2_type", "disc2_pct", "disc2_yen",
+                "sim_fee_rate", "sim_exchange", "target_profit_yen"]
+    sim_context = f"{idx}_{channel}"
+    if st.session_state.get("_sim_context") != sim_context:
+        for key in SIM_KEYS:
+            if key in st.session_state:
+                del st.session_state[key]
+        st.session_state["_sim_context"] = sim_context
+
     col_left, col_right = st.columns(2)
 
     with col_left:
         # 価格設定セクション
         st.markdown('<div class="form-section"><div class="form-section-title">💰 価格設定</div></div>', unsafe_allow_html=True)
-        SIM_KEYS = ["sim_price", "disc1_type", "disc1_pct", "disc1_yen",
-                    "disc2_type", "disc2_pct", "disc2_yen",
-                    "sim_fee_rate", "sim_exchange", "target_profit_yen"]
 
         new_price = st.number_input("販売価格（税込）", min_value=0, max_value=100000,
                                      value=int(current_price), step=100, key="sim_price")
@@ -858,6 +866,7 @@ elif page == "📈 価格シミュレーション":
             for key in SIM_KEYS:
                 if key in st.session_state:
                     del st.session_state[key]
+            st.session_state.pop("_sim_context", None)
             st.rerun()
 
     with col_right:
