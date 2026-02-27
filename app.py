@@ -171,6 +171,131 @@ def inject_custom_css():
         .form-section { padding: 12px; }
         .delete-card { padding: 14px; }
     }
+
+    /* 割引フロー: ステップバー */
+    .price-flow {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin: 12px 0;
+        flex-wrap: wrap;
+    }
+    .price-flow-step {
+        background: #f0f2f6;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: #333;
+        text-align: center;
+        position: relative;
+        min-width: 80px;
+    }
+    .price-flow-step.start { background: #e3f2fd; color: #1565c0; }
+    .price-flow-step.discount { background: #fff3e0; color: #e65100; }
+    .price-flow-step.final { background: #e8f5e9; color: #2e7d32; }
+    .price-flow-arrow {
+        font-size: 1.3em;
+        color: #999;
+        margin: 0 6px;
+    }
+
+    /* ゲージバー */
+    .gauge-bar {
+        position: relative;
+        height: 24px;
+        background: #e0e0e0;
+        border-radius: 12px;
+        overflow: visible;
+        margin: 8px 0 4px 0;
+    }
+    .gauge-bar-fill {
+        height: 100%;
+        border-radius: 12px;
+        transition: width 0.3s;
+    }
+    .gauge-bar-target {
+        position: absolute;
+        top: -4px;
+        width: 3px;
+        height: 32px;
+        background: #333;
+        border-radius: 2px;
+    }
+    .gauge-bar-target-label {
+        position: absolute;
+        top: -20px;
+        font-size: 0.7em;
+        font-weight: 600;
+        color: #333;
+        transform: translateX(-50%);
+        white-space: nowrap;
+    }
+
+    /* コスト内訳: 積み上げ棒グラフ */
+    .cost-stack-bar {
+        display: flex;
+        height: 32px;
+        border-radius: 8px;
+        overflow: hidden;
+        margin: 8px 0;
+    }
+    .cost-stack-bar > div {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7em;
+        font-weight: 600;
+        color: #fff;
+        white-space: nowrap;
+        overflow: hidden;
+        min-width: 2px;
+    }
+
+    /* 現在 vs シミュレーション比較行 */
+    .comparison-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 10px 16px;
+        margin-bottom: 8px;
+        border: 1px solid #e8e8e8;
+    }
+    .comparison-row .comp-label {
+        font-size: 0.82em;
+        color: #888;
+        font-weight: 500;
+    }
+    .comparison-row .comp-values {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+    }
+    .comparison-row .comp-arrow { color: #999; }
+    .comparison-row .comp-diff {
+        font-size: 0.82em;
+        font-weight: 600;
+        margin-left: 8px;
+    }
+    .comp-diff.positive { color: #2e7d32; }
+    .comp-diff.negative { color: #c62828; }
+
+    /* ステータスバッジ */
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.82em;
+        font-weight: 600;
+        line-height: 1.4;
+    }
+    .status-badge.green { background: #e8f5e9; color: #2e7d32; }
+    .status-badge.red { background: #ffebee; color: #c62828; }
+    .status-badge.yellow { background: #fff8e1; color: #f57f17; }
+
     </style>
     """, unsafe_allow_html=True)
 
@@ -196,19 +321,19 @@ def html_section_title(text):
 
 
 def profit_indicator(value, formatted_str):
-    """利益値に赤/緑プレフィクスを追加"""
+    """利益値にCSSバッジを追加"""
     if value < 0:
-        return f"🔴 {formatted_str}"
-    return f"🟢 {formatted_str}"
+        return f'<span class="status-badge red">{formatted_str}</span>'
+    return f'<span class="status-badge green">{formatted_str}</span>'
 
 
-def margin_indicator(margin, formatted_str):
-    """粗利率に赤/黄/緑プレフィクスを追加"""
+def margin_indicator(margin, formatted_str, target=56):
+    """粗利率にCSSバッジを追加"""
     if margin < 0:
-        return f"🔴 {formatted_str}"
-    if margin < 56:
-        return f"🟡 {formatted_str}"
-    return f"🟢 {formatted_str}"
+        return f'<span class="status-badge red">{formatted_str}</span>'
+    if margin < target:
+        return f'<span class="status-badge yellow">{formatted_str}</span>'
+    return f'<span class="status-badge green">{formatted_str}</span>'
 
 
 # =====================================================
@@ -333,6 +458,9 @@ page = st.sidebar.radio(
     label_visibility="collapsed",
 )
 
+st.sidebar.divider()
+TARGET_MARGIN = st.sidebar.number_input("目標粗利率 (%)", min_value=0.0, max_value=99.0, value=56.0, step=1.0, key="target_margin_global")
+
 # =====================================================
 # 画面1: 商品一覧 & 利益ダッシュボード
 # =====================================================
@@ -374,12 +502,12 @@ if page == "📊 商品一覧":
     loss_count = len(view[view[f"{channel}_利益"] < 0])
     profit_count = total - loss_count
     avg_margin = view[f"{channel}_粗利率"].mean() if total > 0 else 0
-    target_met = len(view[view[f"{channel}_粗利率"] >= 56]) if total > 0 else 0
+    target_met = len(view[view[f"{channel}_粗利率"] >= TARGET_MARGIN]) if total > 0 else 0
     total_profit = view[f"{channel}_利益"].sum() if total > 0 else 0
     profit_rate = (profit_count / total * 100) if total > 0 else 0
 
-    # KPIカード (6指標)
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    # KPIカード (6指標 → 3列×2行)
+    k1, k2, k3 = st.columns(3)
     with k1:
         st.markdown(html_metric_card("商品数", f"{total:,}", "", "neutral"), unsafe_allow_html=True)
     with k2:
@@ -389,12 +517,13 @@ if page == "📊 商品一覧":
             "negative" if loss_count > 0 else "positive"
         ), unsafe_allow_html=True)
     with k3:
-        margin_status = "positive" if avg_margin >= 56 else ("warning" if avg_margin >= 40 else "negative")
-        st.markdown(html_metric_card("平均粗利率", f"{avg_margin:.1f}%", "目標: 56%", margin_status), unsafe_allow_html=True)
+        margin_status = "positive" if avg_margin >= TARGET_MARGIN else ("warning" if avg_margin >= TARGET_MARGIN * 0.7 else "negative")
+        st.markdown(html_metric_card("平均粗利率", f"{avg_margin:.1f}%", f"目標: {TARGET_MARGIN:.0f}%", margin_status), unsafe_allow_html=True)
+    k4, k5, k6 = st.columns(3)
     with k4:
         st.markdown(html_metric_card(
             "目標達成数", f"{target_met}",
-            f"粗利率56%以上",
+            f"粗利率{TARGET_MARGIN:.0f}%以上",
             "positive" if target_met > total // 2 else "warning"
         ), unsafe_allow_html=True)
     with k5:
@@ -419,21 +548,43 @@ if page == "📊 商品一覧":
     sort_asc = st.checkbox("昇順（低い順）", value=True)
     view = view.sort_values(sort_col, ascending=sort_asc)
 
-    disp = view[display_cols].copy()
+    # #5 CSVエクスポート
+    csv_export = view[display_cols].copy()
+    csv_export = csv_export.rename(columns=display_names)
+    csv_data = csv_export.to_csv(index=False).encode("utf-8-sig")
+    st.download_button("📥 CSVダウンロード", data=csv_data, file_name=f"veleno_{channel}_products.csv", mime="text/csv")
+
+    # #6 ページネーション
+    ITEMS_PER_PAGE = 20
+    total_items = len(view)
+    if total_items > ITEMS_PER_PAGE:
+        total_pages = (total_items + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
+        current_page = st.number_input("ページ", min_value=1, max_value=total_pages, value=1, step=1, key="table_page")
+        start_idx = (current_page - 1) * ITEMS_PER_PAGE
+        end_idx = min(start_idx + ITEMS_PER_PAGE, total_items)
+        st.caption(f"{total_items}件中 {start_idx+1}〜{end_idx}件を表示（全{total_pages}ページ）")
+        page_view = view.iloc[start_idx:end_idx]
+    else:
+        page_view = view
+
+    disp = page_view[display_cols].copy()
     disp[list_price_col] = disp[list_price_col].apply(lambda x: f"¥{x:,.0f}")
     disp[discount1_col] = disp[discount1_col].apply(lambda x: f"{x:.0%}" if x > 0 else "-")
     disp[price_col] = disp[price_col].apply(lambda x: f"¥{x:,.0f}")
     disp["cost_jpy"] = disp["cost_jpy"].apply(lambda x: f"¥{x:,.0f}")
     # 利益・粗利率にインジケーター追加
-    profit_raw = view[f"{channel}_利益"]
-    margin_raw = view[f"{channel}_粗利率"]
+    profit_raw = page_view[f"{channel}_利益"]
+    margin_raw = page_view[f"{channel}_粗利率"]
     disp[f"{channel}_利益"] = [profit_indicator(p, f"¥{p:,.0f}") for p in profit_raw]
-    disp[f"{channel}_粗利率"] = [margin_indicator(m, f"{m:.1f}%") for m in margin_raw]
+    disp[f"{channel}_粗利率"] = [margin_indicator(m, f"{m:.1f}%", TARGET_MARGIN) for m in margin_raw]
+
+    # #13 赤字行ハイライト用スタイル
+    loss_indices = page_view[page_view[f"{channel}_利益"] < 0].index.tolist()
 
     disp = disp.rename(columns=display_names)
     st.dataframe(
         disp,
-        height=600,
+        height=min(600, max(200, len(disp) * 35 + 50)),
         use_container_width=True,
         column_config={
             "No": st.column_config.NumberColumn(width="small"),
@@ -451,7 +602,7 @@ if page == "📊 商品一覧":
         d.columns = ["商品名", "販売価格", "利益", "粗利率(%)"]
         d["販売価格"] = d["販売価格"].apply(lambda x: f"¥{x:,.0f}")
         d["利益"] = [profit_indicator(p, f"¥{p:,.0f}") for p in src[profit_col]]
-        d["粗利率(%)"] = [margin_indicator(m, f"{m:.1f}%") for m in src[margin_col]]
+        d["粗利率(%)"] = [margin_indicator(m, f"{m:.1f}%", TARGET_MARGIN) for m in src[margin_col]]
         return d
 
     top_col, worst_col = st.columns(2)
@@ -573,7 +724,7 @@ elif page == "🔍 商品詳細・チャネル比較":
     })
     chart_data["色"] = chart_data["利益"].apply(lambda x: "黒字" if x >= 0 else "赤字")
 
-    chart = alt.Chart(chart_data).mark_bar(cornerRadiusEnd=4).encode(
+    bars = alt.Chart(chart_data).mark_bar(cornerRadiusEnd=4).encode(
         y=alt.Y("チャネル:N", sort="-x", title=None),
         x=alt.X("利益:Q", title="利益 (円)"),
         color=alt.Color("色:N",
@@ -584,7 +735,20 @@ elif page == "🔍 商品詳細・チャネル比較":
             alt.Tooltip("チャネル:N"),
             alt.Tooltip("利益:Q", format=",.0f", title="利益(円)")
         ]
-    ).properties(height=200)
+    )
+    text = alt.Chart(chart_data).mark_text(
+        align="left", dx=4, fontSize=12, fontWeight="bold"
+    ).encode(
+        y=alt.Y("チャネル:N", sort="-x"),
+        x=alt.X("利益:Q"),
+        text=alt.Text("利益:Q", format=",.0f"),
+        color=alt.condition(
+            alt.datum["利益"] >= 0,
+            alt.value("#2e7d32"),
+            alt.value("#c62828")
+        )
+    )
+    chart = (bars + text).properties(height=200)
     st.altair_chart(chart, use_container_width=True)
 
 # =====================================================
@@ -652,9 +816,15 @@ elif page == "📈 価格シミュレーション":
         if disc1_type == "割引率(%)":
             discount_pct = st.slider("割引率 (%)", 0, 80, 0)
             price_after_1st = int(new_price * (1 - discount_pct / 100))
+            # #1 相互参考表示
+            disc1_yen_ref = new_price - price_after_1st
+            st.caption(f"= ¥{disc1_yen_ref:,}引き")
         else:
             discount_yen = st.number_input("割引額（円）", min_value=0, max_value=100000, value=0, step=100, key="disc1_yen")
             price_after_1st = max(0, int(new_price - discount_yen))
+            # #1 相互参考表示
+            disc1_pct_ref = (discount_yen / new_price * 100) if new_price > 0 else 0
+            st.caption(f"= {disc1_pct_ref:.1f}% OFF")
         st.write(f"1段階目の割引後: **¥{price_after_1st:,}**")
 
         # 追加割引セクション
@@ -663,9 +833,15 @@ elif page == "📈 価格シミュレーション":
         if disc2_type == "割引率(%)":
             extra_pct = st.slider("追加割引率 (%)", 0, 50, 0)
             discounted_price = max(0, int(price_after_1st * (1 - extra_pct / 100)))
+            # #1 相互参考表示
+            disc2_yen_ref = price_after_1st - discounted_price
+            st.caption(f"= ¥{disc2_yen_ref:,}引き")
         else:
             extra_yen = st.number_input("追加割引額（円）", min_value=0, max_value=50000, value=0, step=100, key="disc2_yen")
             discounted_price = max(0, int(price_after_1st - extra_yen))
+            # #1 相互参考表示
+            disc2_pct_ref = (extra_yen / price_after_1st * 100) if price_after_1st > 0 else 0
+            st.caption(f"= {disc2_pct_ref:.1f}% OFF")
         st.write(f"最終販売価格: **¥{discounted_price:,}**")
         total_off = new_price - discounted_price
         total_off_pct = (total_off / new_price * 100) if new_price > 0 else 0
@@ -676,6 +852,13 @@ elif page == "📈 価格シミュレーション":
         new_fee_rate = st.slider("手数料率 (%)", 0.0, 30.0, cfg["default_fee_rate"] * 100, 0.5) / 100
         new_exchange = st.number_input("為替レート (円/ドル)", min_value=80.0, max_value=200.0,
                                         value=float(row["exchange_rate"]) if row["exchange_rate"] > 0 else 150.0, step=1.0)
+
+        # #4 リセットボタン
+        if st.button("🔄 リセット", use_container_width=True):
+            for key in list(st.session_state.keys()):
+                if key.startswith(("disc1_", "disc2_")):
+                    del st.session_state[key]
+            st.rerun()
 
     with col_right:
         st.markdown(html_section_title("シミュレーション結果"), unsafe_allow_html=True)
@@ -693,9 +876,38 @@ elif page == "📈 価格シミュレーション":
         profit = price_ex - total_cost
         margin = (profit / price_ex * 100) if price_ex > 0 else 0
 
+        # #3 現在 vs シミュレーション比較
+        cur_profit, cur_margin, cur_total_cost = calc_channel_profit(row, channel)
+        profit_diff = profit - cur_profit
+        margin_diff = margin - cur_margin
+        profit_diff_sign = "▲" if profit_diff >= 0 else "▼"
+        margin_diff_sign = "▲" if margin_diff >= 0 else "▼"
+        profit_diff_class = "positive" if profit_diff >= 0 else "negative"
+        margin_diff_class = "positive" if margin_diff >= 0 else "negative"
+        st.markdown(f"""
+        <div class="comparison-row">
+            <div class="comp-label">利益</div>
+            <div class="comp-values">
+                <span>¥{cur_profit:,.0f}</span>
+                <span class="comp-arrow">→</span>
+                <span>¥{profit:,.0f}</span>
+                <span class="comp-diff {profit_diff_class}">{profit_diff_sign} ¥{abs(profit_diff):,.0f}</span>
+            </div>
+        </div>
+        <div class="comparison-row">
+            <div class="comp-label">粗利率</div>
+            <div class="comp-values">
+                <span>{cur_margin:.1f}%</span>
+                <span class="comp-arrow">→</span>
+                <span>{margin:.1f}%</span>
+                <span class="comp-diff {margin_diff_class}">{margin_diff_sign} {abs(margin_diff):.1f}pt</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         # 結果カード（利益正負で色変更）
         profit_status = "positive" if profit >= 0 else "negative"
-        margin_status = "positive" if margin >= 56 else ("warning" if margin >= 0 else "negative")
+        margin_status = "positive" if margin >= TARGET_MARGIN else ("warning" if margin >= 0 else "negative")
 
         r1, r2 = st.columns(2)
         with r1:
@@ -703,29 +915,100 @@ elif page == "📈 価格シミュレーション":
                 "🟢 黒字" if profit >= 0 else "🔴 赤字", profit_status), unsafe_allow_html=True)
         with r2:
             st.markdown(html_metric_card("粗利率", f"{margin:.1f}%",
-                "目標達成" if margin >= 56 else "目標未達", margin_status), unsafe_allow_html=True)
+                f"目標達成" if margin >= TARGET_MARGIN else "目標未達", margin_status), unsafe_allow_html=True)
 
+        # #9 ゲージバー（粗利率）
+        gauge_pct = max(0, min(margin, 100))
+        if margin >= TARGET_MARGIN:
+            gauge_color = "#2e7d32"
+        elif margin >= TARGET_MARGIN * 0.7:
+            gauge_color = "#f9a825"
+        else:
+            gauge_color = "#c62828"
+        target_pos = min(TARGET_MARGIN, 100)
+        st.markdown(f"""
+        <div class="gauge-bar">
+            <div class="gauge-bar-fill" style="width:{gauge_pct}%; background:{gauge_color};"></div>
+            <div class="gauge-bar-target" style="left:{target_pos}%;">
+                <div class="gauge-bar-target-label">目標 {TARGET_MARGIN:.0f}%</div>
+            </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:0.72em; color:#999;">
+            <span>0%</span><span>50%</span><span>100%</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # #8 割引フローの視覚化
+        st.markdown(html_section_title("割引フロー"), unsafe_allow_html=True)
+        flow_html = '<div class="price-flow">'
+        flow_html += f'<div class="price-flow-step start">販売価格<br>¥{new_price:,}</div>'
+        if new_price != price_after_1st:
+            flow_html += '<span class="price-flow-arrow">→</span>'
+            flow_html += f'<div class="price-flow-step discount">1段階目<br>¥{price_after_1st:,}</div>'
+        if price_after_1st != discounted_price:
+            flow_html += '<span class="price-flow-arrow">→</span>'
+            flow_html += f'<div class="price-flow-step discount">2段階目<br>¥{discounted_price:,}</div>'
+        if new_price != discounted_price:
+            flow_html += '<span class="price-flow-arrow">→</span>'
+            flow_html += f'<div class="price-flow-step final">最終価格<br>¥{discounted_price:,}</div>'
+        else:
+            flow_html += '<span class="price-flow-arrow">→</span>'
+            flow_html += f'<div class="price-flow-step final">割引なし</div>'
+        flow_html += '</div>'
+        st.markdown(flow_html, unsafe_allow_html=True)
+
+        # #10 コスト内訳 — 積み上げ棒グラフで常時表示
+        st.markdown(html_section_title("コスト内訳"), unsafe_allow_html=True)
+        cost_items = [
+            ("商品原価", adjusted_cost, "#1565c0"),
+            ("海外送料", row["overseas_shipping"], "#00897b"),
+            (f"手数料({new_fee_rate*100:.1f}%)", fee, "#e65100"),
+            ("国内送料", ship, "#6a1b9a"),
+        ]
+        if total_cost > 0:
+            bar_html = '<div class="cost-stack-bar">'
+            for label, amount, color in cost_items:
+                pct = amount / total_cost * 100
+                bar_html += f'<div style="width:{pct}%; background:{color};" title="{label}: ¥{amount:,.0f}">'
+                if pct > 10:
+                    bar_html += f'¥{amount:,.0f}'
+                bar_html += '</div>'
+            bar_html += '</div>'
+            st.markdown(bar_html, unsafe_allow_html=True)
+            # 凡例
+            legend_html = '<div style="display:flex; flex-wrap:wrap; gap:12px; font-size:0.78em; margin-top:4px;">'
+            for label, amount, color in cost_items:
+                pct = amount / total_cost * 100
+                legend_html += f'<span><span style="display:inline-block;width:10px;height:10px;background:{color};border-radius:2px;margin-right:4px;"></span>{label}: ¥{amount:,.0f} ({pct:.0f}%)</span>'
+            legend_html += '</div>'
+            st.markdown(legend_html, unsafe_allow_html=True)
         st.markdown(html_metric_card("販売コスト合計", f"¥{total_cost:,.0f}", "", "neutral"), unsafe_allow_html=True)
+        st.caption("※輸入消費税は仕入税額控除で回収可能のため、コストに含めていません")
 
-        # コスト内訳をexpanderに収納
-        with st.expander("コスト内訳を表示"):
-            st.write(f"- 商品原価: ¥{adjusted_cost:,.0f}")
-            st.write(f"- 海外送料: ¥{row['overseas_shipping']:,.0f}")
-            st.write(f"- 手数料({new_fee_rate*100:.1f}%): ¥{fee:,.0f}")
-            st.write(f"- 国内送料: ¥{ship:,.0f}")
-            st.caption("※輸入消費税は仕入税額控除で回収可能のため、コストに含めていません")
-
-        # 逆算
+        # 逆算セクション
         st.divider()
-        st.markdown(html_section_title("目標粗利率からの逆算"), unsafe_allow_html=True)
-        target_margin = st.number_input("目標粗利率 (%)", min_value=0.0, max_value=90.0, value=56.0, step=1.0)
+        st.markdown(html_section_title("目標からの逆算"), unsafe_allow_html=True)
+
+        # 目標粗利率からの逆算
+        target_margin = st.number_input("目標粗利率 (%)", min_value=0.0, max_value=90.0, value=float(TARGET_MARGIN), step=1.0)
         base_cost = adjusted_cost + row["overseas_shipping"] + ship
         denom = 1/1.1 - new_fee_rate - target_margin / 100 / 1.1
         if denom > 0:
             required_price = base_cost / denom
-            st.success(f"必要な販売価格（税込）: **¥{required_price:,.0f}**")
+            st.success(f"粗利率 {target_margin:.0f}% に必要な販売価格: **¥{required_price:,.0f}**")
         else:
             st.error("この手数料率と目標粗利率の組み合わせでは達成不可能です")
+
+        # #2 目標利益額からの逆算
+        target_profit_yen = st.number_input("目標利益額（円）", min_value=0, max_value=100000, value=0, step=100, key="target_profit_yen")
+        if target_profit_yen > 0:
+            denom2 = 1/1.1 - new_fee_rate
+            if denom2 > 0:
+                required_price2 = (base_cost + target_profit_yen) / denom2
+                result_margin2 = (target_profit_yen / (required_price2 / 1.1) * 100) if required_price2 > 0 else 0
+                st.success(f"利益 ¥{target_profit_yen:,} に必要な販売価格: **¥{required_price2:,.0f}**（粗利率: {result_margin2:.1f}%）")
+            else:
+                st.error("この手数料率では達成不可能です")
 
 # =====================================================
 # 画面4: 商品管理
