@@ -2,9 +2,6 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import os
-import hashlib
-import datetime
-import extra_streamlit_components as stx
 
 # --- 設定 ---
 CHANNEL_CONFIG = {
@@ -340,34 +337,61 @@ def margin_indicator(margin, formatted_str, target=56):
 
 
 # =====================================================
-# パスワード認証（Cookie で 7日間保持）
+# パスワード認証（localStorage で 7日間保持）
 # =====================================================
-AUTH_COOKIE_NAME = "veleno_auth"
-AUTH_COOKIE_DAYS = 7
+import hashlib, time
+
+AUTH_TOKEN_DAYS = 7
 
 def _make_token(password):
     return hashlib.sha256(f"veleno_{password}_salt".encode()).hexdigest()
 
-@st.cache_resource
-def _get_cookie_manager():
-    return stx.CookieManager()
+def _inject_auth_js(token, days):
+    """ログイン成功時にlocalStorageへトークンを保存するJSを注入"""
+    expires_ms = int(time.time() * 1000) + days * 86400 * 1000
+    st.markdown(f"""
+    <script>
+    localStorage.setItem('veleno_auth', '{token}');
+    localStorage.setItem('veleno_auth_exp', '{expires_ms}');
+    </script>
+    """, unsafe_allow_html=True)
+
+def _inject_auth_check_js():
+    """localStorage からトークンを読み出し、query param に渡すJSを注入"""
+    st.markdown("""
+    <script>
+    (function() {
+        const token = localStorage.getItem('veleno_auth');
+        const exp = localStorage.getItem('veleno_auth_exp');
+        if (token && exp && Date.now() < parseInt(exp)) {
+            const url = new URL(window.location);
+            if (url.searchParams.get('auth') !== token) {
+                url.searchParams.set('auth', token);
+                window.location.replace(url.toString());
+            }
+        }
+    })();
+    </script>
+    """, unsafe_allow_html=True)
 
 def check_password():
-    cookie_manager = _get_cookie_manager()
-
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
 
-    # Cookie チェック
+    # query param 経由の自動ログインチェック
     if not st.session_state.authenticated:
-        token = cookie_manager.get(AUTH_COOKIE_NAME)
-        if token and token == _make_token(st.secrets["password"]):
+        params = st.query_params
+        auth_token = params.get("auth", "")
+        if auth_token == _make_token(st.secrets["password"]):
             st.session_state.authenticated = True
 
     if st.session_state.authenticated:
         return True
 
     inject_custom_css()
+
+    # localStorage チェック用JSを注入
+    _inject_auth_check_js()
 
     st.markdown("""
     <div class="login-card">
@@ -382,8 +406,7 @@ def check_password():
         if st.button("ログイン", type="primary", use_container_width=True):
             if password == st.secrets["password"]:
                 st.session_state.authenticated = True
-                expires = datetime.datetime.now() + datetime.timedelta(days=AUTH_COOKIE_DAYS)
-                cookie_manager.set(AUTH_COOKIE_NAME, _make_token(password), expires_at=expires)
+                _inject_auth_js(_make_token(password), AUTH_TOKEN_DAYS)
                 st.rerun()
             else:
                 st.error("パスワードが正しくありません")
