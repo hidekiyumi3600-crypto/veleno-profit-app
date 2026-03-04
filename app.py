@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import os
+import hashlib
+import datetime
+import extra_streamlit_components as stx
 
 # --- 設定 ---
 CHANNEL_CONFIG = {
@@ -337,11 +340,29 @@ def margin_indicator(margin, formatted_str, target=56):
 
 
 # =====================================================
-# パスワード認証
+# パスワード認証（Cookie で 7日間保持）
 # =====================================================
+AUTH_COOKIE_NAME = "veleno_auth"
+AUTH_COOKIE_DAYS = 7
+
+def _make_token(password):
+    return hashlib.sha256(f"veleno_{password}_salt".encode()).hexdigest()
+
+@st.cache_resource
+def _get_cookie_manager():
+    return stx.CookieManager()
+
 def check_password():
+    cookie_manager = _get_cookie_manager()
+
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
+
+    # Cookie チェック
+    if not st.session_state.authenticated:
+        token = cookie_manager.get(AUTH_COOKIE_NAME)
+        if token and token == _make_token(st.secrets["password"]):
+            st.session_state.authenticated = True
 
     if st.session_state.authenticated:
         return True
@@ -361,6 +382,8 @@ def check_password():
         if st.button("ログイン", type="primary", use_container_width=True):
             if password == st.secrets["password"]:
                 st.session_state.authenticated = True
+                expires = datetime.datetime.now() + datetime.timedelta(days=AUTH_COOKIE_DAYS)
+                cookie_manager.set(AUTH_COOKIE_NAME, _make_token(password), expires_at=expires)
                 st.rerun()
             else:
                 st.error("パスワードが正しくありません")
